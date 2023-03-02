@@ -2,6 +2,7 @@
 本脚本的目的是为了最小化观影的门槛。
 
 使用说明：
+进入(greasyforks)[https://greasyfork.org/zh-CN/scripts/459540-%E6%88%91%E5%8F%AA%E6%83%B3%E5%A5%BD%E5%A5%BD%E8%A7%82%E5%BD%B1]
 安装完毕后，打开豆瓣，搜索自己想看的电影，点击播放，开始看。
 
 # 本脚本特色
