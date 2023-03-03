@@ -6,7 +6,8 @@
 进入[greasyforks](https://greasyfork.org/zh-CN/scripts/459540-%E6%88%91%E5%8F%AA%E6%83%B3%E5%A5%BD%E5%A5%BD%E8%A7%82%E5%BD%B1)
 安装完毕后，打开豆瓣，搜索自己想看的电影，点击播放，开始看。
 
-<img  src="http://oss.liuzhengdong.top/img/202303032323753.png" height="300px">   <img  src="http://oss.liuzhengdong.top/img/202303032324175.png" height="300px">
+<img  src="http://oss.liuzhengdong.top/img/202303032323753.png" height="300px">   
+<img  src="http://oss.liuzhengdong.top/img/202303032336409.png" width="500px">
 
 # 本脚本特色
 1. 极度简洁，没有任何额外的元素，操作流程无比简洁，我个人是非常喜欢的。
