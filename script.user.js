@@ -8,9 +8,9 @@
 // @grant       unsafeWindow
 // @connect     *
 // @run-at      document-end
-// @require     https://unpkg.com/artplayer/dist/artplayer.js
+// @require     https://unpkg.com/artplayer@4.6.2/dist/artplayer.js
 // @require     https://unpkg.com/hls.js@1.2.9/dist/hls.min.js
-// @version     1.4
+// @version     1.8
 // @author      liuser
 // @description 本脚本的目的是为了最小化观影的门槛。
 // @license MIT
@@ -38,6 +38,7 @@
     })(mode)
 
     var art = {} //播放器
+    var dp = {} //dplayer
     //样式
     let css = `
     .TalionNav{
@@ -83,14 +84,20 @@
     //搜索源
     let testSearchSource = [
         // {"name":"闪电资源","searchUrl":"https://sdzyapi.com/api.php/provide/vod/"},//不太好，格式经常有错
-        { "name": "卧龙资源", "searchUrl": "https://collect.wolongzyw.com/api.php/provide/vod/" },
-        { "name": "ikun资源", "searchUrl": "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/" },
-        // {"name":"天空资源","searchUrl":"https://m3u8.tiankongapi.com/api.php/provide/vod/from/tkm3u8/"},//有防火墙，垃圾
         { "name": "非凡资源", "searchUrl": "http://cj.ffzyapi.com/api.php/provide/vod/" },
+        { "name": "卧龙资源", "searchUrl": "https://collect.wolongzyw.com/api.php/provide/vod/" }, //中间插入广告非常恶劣
+        { "name": "ikun资源", "searchUrl": "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/" },
+        { "name": "1818资源", "searchUrl": "https://www.188zy.org/api.php/provide/vod/" },
+        // {"name":"天空资源","searchUrl":"https://m3u8.tiankongapi.com/api.php/provide/vod/from/tkm3u8/"},//有防火墙，垃圾
+        
         // { "name": "飞速资源", "searchUrl": "https://www.feisuzyapi.com/api.php/provide/vod/" },//经常作妖或者没有资源
         { "name": "红牛资源", "searchUrl": "https://www.hongniuzy2.com/api.php/provide/vod/from/hnm3u8/" },
         { "name": "高清资源", "searchUrl": "https://api.1080zyku.com/inc/apijson.php/" },
         { "name": "光速资源", "searchUrl": "https://api.guangsuapi.com/api.php/provide/vod/from/gsm3u8/" },
+        { "name": "量子资源", "searchUrl": "https://cj.lziapi.com/api.php/provide/vod/" },
+        // { "name": "8090资源", "searchUrl": "https://api.yparse.com/api/json/m3u8/" },垃圾 可能有墙
+        { "name": "百度云资源", "searchUrl": "https://api.apibdzy.com/api.php/provide/vod/" },
+
         // {"name":"鱼乐资源","searchUrl":"https://api.yulecj.com/api.php/provide/vod/"},//速度太慢
         // {"name":"无尽资源","searchUrl":"https://api.wujinapi.me/api.php/provide/vod/"},//资源少
 
@@ -110,6 +117,7 @@
   
     <div class="artplayer-app" style="width:100%;height:500px;">
     </div>
+    <div>部分影片选集后会出现卡顿，拖动一下进度条即可恢复。</div>
   
   </div>`//player的contianer
 
@@ -204,7 +212,14 @@
     }
     //修改播放器url
     function changeUrl(url) {
-        art.switchUrl(url)
+        // dplayer.switchVideo({
+        //   url:url,
+        // },{})
+        art.url = url
+        // createPurePlayer(url)
+        log_machine(`切换到${url}`)
+        // art.url = url
+        // art.play()
     }
 
     //生成剧集
@@ -233,7 +248,7 @@
         document.body.appendChild(container)
         //关闭播放器钩子
         let button = document.querySelector(".liu-closePlayer")
-        log_machine(button)
+        // log_machine(button)
         button.onclick = () => {
             destroyPlayer()
         }
@@ -252,7 +267,9 @@
             fullscreen: true,
             airplay: true,
             playbackRate: true,
-            autoplay: true,
+            autoSize: true,
+            // playsInline:false,
+
             customType: {
                 m3u8: function (video, url) {
                     // Attach the Hls instance to the Artplayer instance
@@ -265,6 +282,27 @@
                 },
             },
         });
+        // dplayer = new DPlayer({
+        //     container: document.querySelector(containerClass),
+        //     screenshot: true,
+        //     autoplay:true,
+        //     airplay:true,
+        //     chromecast:true,
+        //     video: {
+        //         url: url,
+        //         type:"hls",
+        //     }
+        // });
+        // art.on('video:loadedmetadata', () => {
+        //     art.forward = 10;
+        // });
+        // art.on('url', (url) => {
+        //   console.info('url', url);
+        //   art.hls = new Hls();
+        //   art.hls.loadSource(url);
+        //   art.hls.attachMedia(video);
+        // });
+
     }
 
     //销毁播放器
@@ -279,6 +317,9 @@
     function getVideoName() {
         if (device == "mobile") {
             videoName = document.querySelector(".sub-title").innerText
+            if (window.getSelection().toString() != "") {
+                videoName = window.getSelection().toString()
+            }
             return videoName
         }
         if (window.getSelection().toString() != "") {
@@ -288,6 +329,32 @@
             videoName = document.querySelector("h1>span").innerText
         }
         return videoName
+    }
+
+
+    function getVideoNumbers() {
+        let numbers = 0;
+        try {
+            numbers = document.querySelectorAll(".pl")[7].nextSibling.textContent.slice(1);
+        } catch (e) {
+            log_machine("获取剧集出现错误，请检查！");
+        }
+        return numbers;
+    }
+
+    function getVideoYear(outYear) {
+        let yearEqual = 0;
+        try {
+            if (device == "mobile") {
+                yearEqual = document.querySelector(".sub-original-title").innerText.includes(outYear);
+            } else {
+                yearEqual = document.querySelector(".year").innerText.includes(outYear)
+            }
+
+        } catch (e) {
+            log_machine("获取年份失败，请检查！");
+        }
+        return yearEqual;
     }
 
     //到电影网站搜索电影
@@ -322,19 +389,28 @@
             log_machine("未搜索到结果")
             return 0
         }
-        let video = r.list[0];
+        let video = {};
+        let found = false
         for (let item of r.list) {
-            log_machine(`对比${item.vod_name}和${searchName}`)
-            if (searchName == item.vod_name) {
+
+            log_machine("正在对比剧集年份")
+            let yearEqual = getVideoYear(item.vod_year)
+            if (yearEqual === 0) return 0
+            if (yearEqual) {
                 video = { ...item }
+                found = true
                 break
             }
+        }
+        if (found == false) {
+            log_machine("没有找到匹配剧集的影片，怎么回事哟！")
+            return 0
         }
 
         let videoName = video.vod_name;
         let playList = video.vod_play_url.split("$$$").filter(str => str.includes("m3u8"));
         if (playList.length == 0) {
-            log_machine("没有m3u8资源，无法测速")
+            log_machine("没有m3u8资源，无法测速，无法播放")
             return 0
         }
         playList = playList[0].split("#");
@@ -358,7 +434,6 @@
                 onerror: function (e) {
                     resolve("html")
                 }
-
             })
         })
     }
@@ -515,7 +590,7 @@
             sortedSource.push({ ...item, "speed": speed })
         }
         sortedSource.sort((a, b) => {
-            return a.speed - b.speed;//从大到小排序
+            return b.speed - a.speed;//从大到小排序
         })
         log_machine("排序完成...")
         for (let item of sortedSource) {
