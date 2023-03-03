@@ -1,13 +1,4 @@
-<!--
- * @Author: 刘政东 735083049@qq.com
- * @Date: 2023-03-03 19:19:36
- * @LastEditors: 刘政东 735083049@qq.com
- * @LastEditTime: 2023-03-03 19:20:05
- * @FilePath: /undefined/Users/liuzhengdong/Code/autoMovies/README.md
- * @Description: 
- * 
- * Copyright (c) 2023 by ${git_name_email}, All Rights Reserved. 
--->
+
 # 我只想好好观影
 本脚本的目的是为了最小化观影的门槛。
 
