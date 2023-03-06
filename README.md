@@ -27,7 +27,7 @@
 我是尝试了许多看电影的方式，NAS，jellyfin，AList，无一例外，都很复杂，我只想能轻松快速的看电影看电视剧。
 
 # 捐赠
-本脚本自身不含任何广告，[捐赠开发者](http://memos.babelgo.cn/m/3)
+本脚本自身不含任何广告，[捐赠开发者](http://memos.babelgo.cn/m/1)
 
 
 # 声明
