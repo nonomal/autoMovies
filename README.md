@@ -1,13 +1,12 @@
-
 # 我只想好好观影
-本脚本的目的是为了最小化观影的门槛。
 
 使用说明：
 进入[greasyforks](https://greasyfork.org/zh-CN/scripts/459540-%E6%88%91%E5%8F%AA%E6%83%B3%E5%A5%BD%E5%A5%BD%E8%A7%82%E5%BD%B1)
-安装完毕后，打开豆瓣，搜索自己想看的电影，点击播放，开始看。
+安装完毕后，打开豆瓣，搜索自己想看的电影，点击<mark>一键播放</mark>，开始看。
 
-<img  src="http://oss.liuzhengdong.top/img/202303032323753.png" height="300px">   
-<img  src="http://oss.liuzhengdong.top/img/202303032336409.png" width="500px">
+<img src="https://img1.imgtp.com/2023/03/05/qp2G1Qdq.png" width="500px"/>
+
+<mark>注意，油猴脚本会提示跨域请求，请点击最下方的橙色按钮（允许全部）。</mark>
 
 # 本脚本特色
 1. 极度简洁，没有任何额外的元素，操作流程无比简洁，我个人是非常喜欢的。
@@ -28,27 +27,8 @@
 我是尝试了许多看电影的方式，NAS，jellyfin，AList，无一例外，都很复杂，我只想能轻松快速的看电影看电视剧。
 
 # 捐赠
-本脚本自身不含任何广告，如果你用爽了，能不能捐赠一下？我真的超穷。
-https://afdian.net/a/btworld
+本脚本自身不含任何广告，[捐赠开发者](http://memos.babelgo.cn/m/3)
+
 
 # 声明
 本脚本是在暴力猴上开发的，如果油猴有什么bug，请反馈。
-
-
-
-# 更新日志
-## v1.0
-第一版完成初步功能
-
-## v1.1
-修复一处资源引用错误，添加一个采集站
-
-## v1.2
-支持手机
-
-## v1.3
-修复排序bug，改进UI
-
-## v1.4
-针对ios修复，在iPad，MacOS测试通过
-
