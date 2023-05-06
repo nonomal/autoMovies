@@ -3,452 +3,319 @@
 // @namespace   liuser.betterworld.love
 // @match       https://movie.douban.com/subject/*
 // @match       https://m.douban.com/movie/*
+// @grant       GM_addStyle
 // @grant       GM_xmlhttpRequest
-// @grant       GM_download
-// @grant       unsafeWindow
 // @connect     *
 // @run-at      document-end
-// @require     https://unpkg.com/artplayer@4.6.2/dist/artplayer.js
+// @require     https://cdn.jsdelivr.net/npm/xy-ui@1.10.7/+esm
+// @require     https://cdn.staticfile.org/artplayer/4.6.2/artplayer.min.js
 // @require     https://unpkg.com/hls.js@1.2.9/dist/hls.min.js
-// @version     1.8
-// @author      liuser
-// @description 本脚本的目的是为了最小化观影的门槛。
+// @version     2.4
+// @author      liuser, collaborated with ray
+// @description 想看就看
 // @license MIT
 // ==/UserScript==
 
-//finish for循环检测有资源的链接
-//finish 开始搜索时先搜索所有资源的链接，选出返回最快的那个
-//如果点击播放5秒内没反应就多点几下
-
-
 (function () {
+    const _debug = 0;
+    let art = {}; //播放器
+    let seriesNum = 0;
+    const { query: $, queryAll: $$, isMobile } = Artplayer.utils;
+    const tip = (message) => XyMessage.info(message);
 
-    let mode = "debug"
-    //调试log
-    let log_machine = (function (mode) {
-        if (mode == "debug") {
-            return function (log) {
-                console.log(log)
-            }
-        } else {
-            return function (log) {
+    //获取豆瓣影片名称
+    const videoName = isMobile ? $(".sub-title").innerText : document.title.slice(0, -5);
 
-            }
-        }
-    })(mode)
-
-    var art = {} //播放器
-    var dp = {} //dplayer
-    //样式
-    let css = `
-    .TalionNav{
-    z-index:10;
-    }
-    .liu-playContainer{
-    width:100%;
-    height:100%;
-    background-color:white;
-    position:fixed;
-    top:0;
-    z-index:11;
-  }
-  .liu-closePlayer{
-  float:right;
-  margin-inline:10px;
-  }
-  .video-selector{
-      display:flex;
-      flex-wrap:wrap;
-    width:100%;
-    overflow:scroll;
-    margin-top:10px;
-  }
-  .liu-selector:hover{
-      color:#aed0ee;
-    background-color:none;
-  }
-  .liu-selector{
-    color:black;
-      cursor:pointer;
-    padding:3px;
-      margin:5px;
-    border-radius:2px;
-  }
-  .liu-sourceButton{
-    margin-inline:5px;
-  }
-  
-  
-  `
-
-    //搜索源
-    let testSearchSource = [
-        // {"name":"闪电资源","searchUrl":"https://sdzyapi.com/api.php/provide/vod/"},//不太好，格式经常有错
-        { "name": "非凡资源", "searchUrl": "http://cj.ffzyapi.com/api.php/provide/vod/" },
-        { "name": "卧龙资源", "searchUrl": "https://collect.wolongzyw.com/api.php/provide/vod/" }, //中间插入广告非常恶劣
-        { "name": "ikun资源", "searchUrl": "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/" },
-        { "name": "1818资源", "searchUrl": "https://www.188zy.org/api.php/provide/vod/" },
-        // {"name":"天空资源","searchUrl":"https://m3u8.tiankongapi.com/api.php/provide/vod/from/tkm3u8/"},//有防火墙，垃圾
-        
-        // { "name": "飞速资源", "searchUrl": "https://www.feisuzyapi.com/api.php/provide/vod/" },//经常作妖或者没有资源
-        { "name": "红牛资源", "searchUrl": "https://www.hongniuzy2.com/api.php/provide/vod/from/hnm3u8/" },
-        { "name": "高清资源", "searchUrl": "https://api.1080zyku.com/inc/apijson.php/" },
-        { "name": "光速资源", "searchUrl": "https://api.guangsuapi.com/api.php/provide/vod/from/gsm3u8/" },
-        { "name": "量子资源", "searchUrl": "https://cj.lziapi.com/api.php/provide/vod/" },
-        // { "name": "8090资源", "searchUrl": "https://api.yparse.com/api/json/m3u8/" },垃圾 可能有墙
-        { "name": "百度云资源", "searchUrl": "https://api.apibdzy.com/api.php/provide/vod/" },
-
-        // {"name":"鱼乐资源","searchUrl":"https://api.yulecj.com/api.php/provide/vod/"},//速度太慢
-        // {"name":"无尽资源","searchUrl":"https://api.wujinapi.me/api.php/provide/vod/"},//资源少
-
-    ]
-
-
-    let device = "pc"
-    if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
-        device = "mobile"
-        log_machine(`识别到是手机`)
-    }
-    let containerClass = ".artplayer-app"//包装器的class
-    let artplayerContainer = `
-  <div class="liu-playContainer">
-    <a class="liu-closePlayer">点击此处关闭播放</a>
-    <div class="sourceButtonList"></div>
-  
-    <div class="artplayer-app" style="width:100%;height:500px;">
-    </div>
-    <div>部分影片选集后会出现卡顿，拖动一下进度条即可恢复。</div>
-  
-  </div>`//player的contianer
-
-    let videoName = ""
-    let videosSelector = `<div class="video-selector"></div>` //剧集选择器的container
-    let selector = `<a class="liu-selector" ></a>` //每集的点击按钮
-    let playButton = `<a class="liu-rapidPlay">播放</a>`
-    let SourceButtonTemplate = `<a class="liu-sourceButton"></a>` //资源选择器
-
-
-
-
-
-
-    //创建其他资源的按钮
-    async function createSourceButton(name) {
-        let tip = htmlToElement(`<span class="liu-tip">正在测速...你先看着，如果此段文字时间过长，那就是出bug了，排最前面的速度最快</span>`)
-        let playContainer = document.querySelector(".liu-playContainer")
-        playContainer.insertBefore(tip, playContainer.childNodes[0])
-        let sortedSource = await sortSource(testSearchSource)
-        playContainer.firstChild.remove()
-        for (let source of sortedSource) {
-            let buttonElement = htmlToElement(SourceButtonTemplate)
-            buttonElement.innerText = source.name
-            let copy = { ...source }
-            buttonElement.onclick = async () => {
-                destroyPlayer()
-                go(copy)
-            }
-            playContainer.insertBefore(buttonElement, playContainer.childNodes[0])
-        }
-    }
-    //先创建一个列表，然后再测速
-    async function createSourceListFirst(name) {
-        //先获得可以搜到资源的列表
-        let searchedSource = []
-        for (let item of testSearchSource) {
-            log_machine(`正在搜索${item.name}`)
-            let playList = await search(item.searchUrl, videoName)
-            if (playList == 0) continue;
-            searchedSource.push({ ...item })
-        }
-        log_machine(searchedSource[0])
-        //先渲染这个列表
-        let sourceButtonList = document.querySelector(".sourceButtonList")
-        for (let item of searchedSource) {
-            let sourceButton = htmlToElement(SourceButtonTemplate)
-            log_machine(`给这个按钮命名${item}`)
-            sourceButton.innerText = item.name
-            sourceButton.onclick = async () => {
-                destroyPlayer()
-                go({ ...item })
-            }
-            sourceButtonList.appendChild(sourceButton)
-
-        }
-        sourceButtonList.appendChild(htmlToElement(`<span class="liu-tip">...自动排序中，排最前面的速度最快</span>`))
-        let sortedSource = await sortSource(searchedSource);
-        // 重新渲染列表
-        sourceButtonList.innerHTML = ""
-        for (let item of sortedSource) {
-            let buttonElement = htmlToElement(SourceButtonTemplate)
-            buttonElement.innerText = item.name
-            buttonElement.onclick = async () => {
-                destroyPlayer()
-                go({ ...item })
-            }
-            sourceButtonList.appendChild(buttonElement)
-        }
-
-    }
-
-
-
-
-
-    //添加style样式
-    function appendStyle(css) {
-        let styleSheet = document.createElement("style")
-        styleSheet.innerText = css
-        document.head.appendChild(styleSheet)
-    }
-
-
+    // debug
+    const log = (function () {
+        if (_debug) return console.log.bind(console);
+        return function () { };
+    })();
 
     //将html转为element
     function htmlToElement(html) {
-        var template = document.createElement('template');
-        html = html.trim(); // Never return a text node of whitespace as the result
-        template.innerHTML = html;
+        const template = document.createElement('template');
+        template.innerHTML = html.trim();
         return template.content.firstChild;
     }
-    //修改播放器url
-    function changeUrl(url) {
-        // dplayer.switchVideo({
-        //   url:url,
-        // },{})
-        art.url = url
-        // createPurePlayer(url)
-        log_machine(`切换到${url}`)
-        // art.url = url
-        // art.play()
+
+    function addScript() {//添加统计脚本
+        let statistic = document.createElement('script');
+        statistic.setAttribute("src", "https://hm.baidu.com/hm.js?f02301d8266631b0285c3e325c9a574b")
+        document.head.appendChild(statistic);
     }
 
-    //生成剧集
-    function createVideoSelector(list) {
+    //搜索源
+    const searchSource = [
+        // {"name":"闪电资源","searchUrl":"https://sdzyapi.com/api.php/provide/vod/"},//不太好，格式经常有错
+        // { "name": "卧龙资源", "searchUrl": "https://collect.wolongzyw.com/api.php/provide/vod/" }, 非常恶心的广告
+        { "name": "非凡资源", "searchUrl": "http://cj.ffzyapi.com/api.php/provide/vod/" },
+        { "name": "量子资源", "searchUrl": "https://cj.lziapi.com/api.php/provide/vod/" },
+        { "name": "ikun资源", "searchUrl": "https://ikunzyapi.com/api.php/provide/vod/from/ikm3u8/at/json/" },
+        { "name": "光速资源", "searchUrl": "https://api.guangsuapi.com/api.php/provide/vod/from/gsm3u8/" },
+        { "name": "高清资源", "searchUrl": "https://api.1080zyku.com/inc/apijson.php/" },
+        { "name": "188资源", "searchUrl": "https://www.188zy.org/api.php/provide/vod/" },
+        // { "name": "飞速资源", "searchUrl": "https://www.feisuzyapi.com/api.php/provide/vod/" },//经常作妖或者没有资源
+        { "name": "红牛资源", "searchUrl": "https://www.hongniuzy2.com/api.php/provide/vod/from/hnm3u8/" },
+        // {"name":"天空资源","searchUrl":"https://m3u8.tiankongapi.com/api.php/provide/vod/from/tkm3u8/"},//有防火墙，垃圾
+        // { "name": "8090资源", "searchUrl": "https://api.yparse.com/api/json/m3u8/" },垃圾 可能有墙
+        // { "name": "百度云资源", "searchUrl": "https://api.apibdzy.com/api.php/provide/vod/" },
+        // { "name": "酷点资源", "searchUrl": "https://kudian10.com/api.php/provide/vod/" },
+        // { "name": "淘片资源", "searchUrl": "https://taopianapi.com/home/cjapi/as/mc10/vod/json/" },
+        // { "name": "ck资源", "searchUrl": "https://ckzy.me/api.php/provide/vod/" },
+        // { "name": "快播资源", "searchUrl": "https://caiji.kczyapi.com/api.php/provide/vod/" },
+        // { "name": "海外看资源", "searchUrl": "http://api.haiwaikan.com/v1/vod/" }, // 说是屏蔽了所有中国的IP，所以如果你有外国的ip可能比较好
+        // { "name": "68资源", "searchUrl": "https://caiji.68zyapi.com/api.php/provide/vod/" },
 
-        let videosSelectorContainer = htmlToElement(videosSelector);
-        let selectorContainer = htmlToElement(selector);
-        list.forEach(item => {
-            log_machine(`${item.name}:${item.url}`)
-            let selectorContainerCopy = selectorContainer.cloneNode()
-            selectorContainerCopy.innerText = item.name;
-            selectorContainerCopy.onclick = () => {
-                log_machine(`正在播放${item.name}:${item.url}`)
-                changeUrl(item.url)
-            }
-            videosSelectorContainer.appendChild(selectorContainerCopy)
+        // https://caiji.kczyapi.com/api.php/provide/vod/
+        // {"name":"鱼乐资源","searchUrl":"https://api.yulecj.com/api.php/provide/vod/"},//速度太慢
+        // {"name":"无尽资源","searchUrl":"https://api.wujinapi.me/api.php/provide/vod/"},//资源少
 
-        })
-        document.querySelector(".liu-playContainer").appendChild(videosSelectorContainer)
-    }
-
-
-    //生成播放器
-    function createPlayer(url) {
-        let container = htmlToElement(artplayerContainer);
-        document.body.appendChild(container)
-        //关闭播放器钩子
-        let button = document.querySelector(".liu-closePlayer")
-        // log_machine(button)
-        button.onclick = () => {
-            destroyPlayer()
-        }
-        createPurePlayer(url)
-
-    }
-
-
-    //生成纯播放器
-    function createPurePlayer(url) {
-        //播放器
-        art = new Artplayer({
-            container: containerClass,
-            url: url,
-            setting: true,
-            fullscreen: true,
-            airplay: true,
-            playbackRate: true,
-            autoSize: true,
-            // playsInline:false,
-
-            customType: {
-                m3u8: function (video, url) {
-                    // Attach the Hls instance to the Artplayer instance
-                    art.hls = new Hls();
-                    art.hls.loadSource(url);
-                    art.hls.attachMedia(video);
-                    if (!video.src) {
-                        video.src = url;
-                    }
-                },
-            },
-        });
-        // dplayer = new DPlayer({
-        //     container: document.querySelector(containerClass),
-        //     screenshot: true,
-        //     autoplay:true,
-        //     airplay:true,
-        //     chromecast:true,
-        //     video: {
-        //         url: url,
-        //         type:"hls",
-        //     }
-        // });
-        // art.on('video:loadedmetadata', () => {
-        //     art.forward = 10;
-        // });
-        // art.on('url', (url) => {
-        //   console.info('url', url);
-        //   art.hls = new Hls();
-        //   art.hls.loadSource(url);
-        //   art.hls.attachMedia(video);
-        // });
-
-    }
-
-    //销毁播放器
-    function destroyPlayer() {
-        art.destroy();
-        document.querySelector(".liu-playContainer").remove();
-    }
-
-
-
-    //获取豆瓣影片名称
-    function getVideoName() {
-        if (device == "mobile") {
-            videoName = document.querySelector(".sub-title").innerText
-            if (window.getSelection().toString() != "") {
-                videoName = window.getSelection().toString()
-            }
-            return videoName
-        }
-        if (window.getSelection().toString() != "") {
-            videoName = window.getSelection().toString()
-        }
-        if (videoName == "") {
-            videoName = document.querySelector("h1>span").innerText
-        }
-        return videoName
-    }
-
-
-    function getVideoNumbers() {
-        let numbers = 0;
-        try {
-            numbers = document.querySelectorAll(".pl")[7].nextSibling.textContent.slice(1);
-        } catch (e) {
-            log_machine("获取剧集出现错误，请检查！");
-        }
-        return numbers;
-    }
-
-    function getVideoYear(outYear) {
-        let yearEqual = 0;
-        try {
-            if (device == "mobile") {
-                yearEqual = document.querySelector(".sub-original-title").innerText.includes(outYear);
-            } else {
-                yearEqual = document.querySelector(".year").innerText.includes(outYear)
-            }
-
-        } catch (e) {
-            log_machine("获取年份失败，请检查！");
-        }
-        return yearEqual;
-    }
-
-    //到电影网站搜索电影
-    function search(url, videoName) {
-        log_machine(`正在搜索${videoName}`)
-        return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: "GET",
-                url: encodeURI(`${url}?ac=detail&wd=${videoName}`),
-                onload: function (r) {
-                    try {
-                        // log_machine(`搜索结果为${JSON.stringify(r)}`)
-                        let response = JSON.parse(r.responseText)
-                        resolve(handleResponse(response, videoName));
-                    } catch (e) {
-                        log_machine("垃圾资源，解析失败了，可能有防火墙")
-                        log_machine(e)
-                        resolve({ "list": [] })
-                    }
-
-                },
-                onerror: function (error) {
-                    resolve({ "list": [] })
-                }
-            });
-        });
-    }
+    ];
 
     //处理搜索到的结果:从返回结果中找到对应片子
-    function handleResponse(r, searchName) {
-        if (r.list.length == 0) {
-            log_machine("未搜索到结果")
+    function handleResponse(r) {
+        if (!r || r.list.length == 0) {
+            log("未搜索到结果");
             return 0
         }
-        let video = {};
-        let found = false
+        let video, found = false;
         for (let item of r.list) {
-
-            log_machine("正在对比剧集年份")
-            let yearEqual = getVideoYear(item.vod_year)
-            if (yearEqual === 0) return 0
+            log("正在对比剧集年份");
+            let yearEqual = getVideoYear(item.vod_year);
+            if (yearEqual === 0) return 0;
             if (yearEqual) {
-                video = { ...item }
-                found = true
+                video = item;
+                found = true;
                 break
             }
         }
         if (found == false) {
-            log_machine("没有找到匹配剧集的影片，怎么回事哟！")
+            log("没有找到匹配剧集的影片，怎么回事哟！");
             return 0
         }
 
-        let videoName = video.vod_name;
         let playList = video.vod_play_url.split("$$$").filter(str => str.includes("m3u8"));
         if (playList.length == 0) {
-            log_machine("没有m3u8资源，无法测速，无法播放")
+            log("没有m3u8资源, 无法测速, 无法播放");
             return 0
         }
         playList = playList[0].split("#");
         playList = playList.map(str => {
             let index = str.indexOf("$");
             return { "name": str.slice(0, index), "url": str.slice(index + 1) }
-        })
+        });
 
         return playList
     }
 
-    //获取下载的内容
-    function gm_download(url) {
+    //到电影网站搜索电影
+    const search = (url) => new Promise((resolve, reject) => {
+        GM_xmlhttpRequest({
+            method: "GET",
+            url: encodeURI(`${url}?ac=detail&wd=${videoName}`),
+            timeout: 3000,
+            responseType: 'json',
+            onload(r) {
+                try {
+                    resolve(handleResponse(r.response, videoName));
+                } catch (e) {
+                    log("垃圾资源，解析失败了，可能有防火墙");
+                    log(e);
+                    reject()
+                }
+            },
+            onerror: reject,
+            ontimeout: reject
+        });
+    });
+
+    //播放按钮
+    class PlayBtn {
+        constructor() {
+            const e = htmlToElement(`<xy-button type="primary">一键播放</xy-button>`);
+            $(isMobile ? ".sub-original-title" : "h1").appendChild(e);
+            const render = async (item) => {
+                const playList = await search(item.searchUrl);
+                if (playList == 0) return;
+                if (e.loading) {
+                    e.loading = false;
+                    new UI(playList);
+                }
+                //渲染资源列表
+                const btn = new SourceButton({ name: item.name, playList }).element;
+                $(".sourceButtonList").appendChild(btn);
+
+            };
+            e.onclick = function () {
+                e.loading = true;
+                tip("正在搜索");
+                searchSource.forEach(render);
+                setTimeout(() => {
+                    if (e.loading == true) {
+                        e.loading = false;
+                        tip("未搜索到资源")
+                    } else {
+                        speedTest()
+                    }
+                }, 3500);
+            };
+        }
+    }
+
+    //影视源选择按钮
+    class SourceButton {
+        constructor(item) {
+            this.element = htmlToElement(`<xy-button class="source-selector" type="dashed">${item.name}</xy-button>`);
+            this.element.onclick = () => {
+                switchUrl(item.playList[seriesNum].url);
+                $(".series-select-space").remove();
+                new SeriesContainer(item.playList);
+            };
+            this.element._playList = item.playList
+            this.element._sourceName = item.name
+        }
+        //sources 是[{name:"..资源",playList:[{name:"第一集",url:""}]}]
+    }
+
+    //剧集选择器
+    class SeriesButton {
+        constructor(pNode, name, url, index) {
+            pNode.appendChild(htmlToElement(
+                `<xy-button class="series-selector" style="color:#a3a3a3" type="flat">${name}</xy-button>`
+            )).onclick = () => {
+                seriesNum = index;
+                switchUrl(url);
+                $(".show-series").innerText = `正在播放第${index + 1}集`;
+                speedTest()
+            };
+        }
+    }
+
+    //剧集选择器的container
+    class SeriesContainer {
+        constructor(playList) {
+            const e = htmlToElement(`<div class="series-select-space" style="display:flex;flex-wrap:wrap;overflow:scroll;align-content: start;"></div>`);
+            for (let [index, item] of playList.entries()) {
+                new SeriesButton(e, item.name, item.url, index);
+            }
+            $(".playSpace").appendChild(e);
+        }
+    }
+
+    class UI {
+        constructor(playList) {
+            document.body.appendChild(htmlToElement(
+                `<div class="liu-playContainer">
+				<a class="liu-closePlayer">关闭界面</a>
+				<div class="sourceButtonList"></div>
+				<div class="playSpace" style="margin-top:1em;width:100%">
+					<div class="artplayer-app"></div>
+				</div>
+				<div class="show-series" style="color:#a3a3a3"></div>
+				<p style="color:#a3a3a3">默认会播放第一个搜索到的资源，如果无法播放请尝试切换其他资源。</p>
+				<p style="color:#a3a3a3">部分影片选集后会出现卡顿，点击播放按钮或拖动一下进度条即可恢复。</p>
+				<a href="http://babelgo.cn:5230/m/1" target="_blank" style="color:#4aa150">❤️支持开发者</a>
+			</div>`
+            )).querySelector(".liu-closePlayer").onclick = function () {
+                this.parentNode.remove();
+                document.body.style.overflow = 'auto';
+            };
+            document.body.style.overflow = 'hidden';
+            //第n集开始播放
+            log(playList[seriesNum].url);
+            initArt(playList[seriesNum].url);
+            new SeriesContainer(playList);
+        }
+    }
+
+    //初始化播放器
+    function initArt(url) {
+        art = new Artplayer({
+            container: ".artplayer-app",
+            url, pip: true,
+            autoSize: true,
+            fullscreen: true,
+            fullscreenWeb: true,
+            screenshot: true,
+            hotkey: true,
+            airplay: true,
+            playbackRate: true,
+            controls: [{
+                name: "resolution",
+                html: "分辨率",
+                position: "right"
+            }],
+            customType: {
+                m3u8(video, url) {
+                    // Attach the Hls instance to the Artplayer instance
+                    if (art.hls) art.hls.destroy();
+                    art.hls = new Hls();
+                    art.hls.loadSource(url);
+                    art.hls.attachMedia(video);
+                    if (!video.src) {//兼容safari
+                        video.src = url;
+                    }
+                },
+            }
+        });
+        art.once('destroy', () => art.hls.destroy());
+        art.on("video:loadedmetadata", () => {
+            art.controls.resolution.innerText = art.video.videoHeight + "P";
+        });
+        log(art)
+    }
+
+
+    function switchUrl(url) {//兼容safari
+        art.switchUrl(url)
+        if (art.video.src != url) {
+            art.video.src = url;
+        }
+    }
+
+    //获取电影的年份
+    function getVideoYear(outYear) {
+        const e = $(isMobile ? ".sub-original-title" : ".year");
+        if (!e) {
+            log("获取年份失败，请检查！");
+            return 0;
+        }
+        return e.innerText.includes(outYear);
+    }
+
+
+    //下载
+    const get = (url) => {
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
                 method: "GET",
                 url: encodeURI(url),
+                timeout: 10000,
                 onload: function (r) {
                     resolve(r.response)
                 },
                 onerror: function (e) {
+                    resolve("html")
+                },
+                ontimeout: function (o) {
                     resolve("html")
                 }
             })
         })
     }
 
-
     //下载m3u8的内容，返回片段列表
     async function downloadM3u8(url) {
         let domain = url.split("/")[0]
         let baseUrl = url.split("/")[2]
         let downLoadList = []
-        log_machine(`正在获取index.m3u8 ${url}`)
-        let downloadContent = await gm_download(url)
+        log(`正在获取index.m3u8 ${url}`)
+        let downloadContent = await get(url)
 
         if (downloadContent.includes("html")) {
-            log_machine(`下载失败，被反爬虫了`)
+            log(downloadContent)
+            log(`下载失败，被反爬虫了`)
             return []
         }
 
@@ -477,132 +344,226 @@
                 }
             }
         }
-        log_machine(`测试列表为${downLoadList}`)
+        // log(`测试列表为${downLoadList}`)
         return downLoadList
 
     }
 
 
+    //对资源进行测速
+    function speedTest() {
+        tip("开始测速")
+        let sourceButtons = $$(".source-selector")
+        //log(sourceButtons)
+        sourceButtons.forEach(async (e) => {
+            let url = e._playList[seriesNum].url
+            let tsList = await downloadM3u8(url)
+            let downloadList = []
+            for (let i = 0; i < 8; i++) {
+                downloadList.push(tsList[Math.floor(Math.random() * tsList.length)])
+            }
 
-    //测试下载速度
-    async function testSpeed(list) {
-        let downloadList = list.slice(0, 5)
-        let downloadSize = 0
-        let startTime = (new Date()).getTime();
+            let downloadSize = 0
+            let startTime = Date.now();
 
+            for (item of downloadList) {
+                log("正在下载" + item)
+                let r = await getBuffer(item)
+                downloadSize += r.byteLength / 1024 / 1024
+            }
+            let endTime = Date.now();
+            let duration = (endTime - startTime) / 1000
+            let speed = downloadSize / duration ? downloadSize / duration : 0
 
-        for (item of downloadList) {
-            log_machine("正在下载" + item)
-            let r = await makeGetRequest(item)
-            downloadSize += r.loaded / 1024
-        }
+            log(`速度为${speed}mb/s`)
 
-        let endTime = (new Date()).getTime();
-        let duration = (endTime - startTime) / 1000
-        let speed = downloadSize / duration
+            e.innerText = e._sourceName + " " + speed.toFixed(2) + "mb/s"
+            let state = speed > 1 ? "fast" : "slow"
+            e.classList.add(`speed-${state}`)
 
-        log_machine(`速度为${speed}KB/s`)
-        return speed
+        })
     }
 
+
     //将GM_xmlhttpRequest改造为Promise
-    function makeGetRequest(url) {
+    function getBuffer(url) {
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
                 method: "GET",
+                timeout: 3000,
                 url: encodeURI(url),
                 responseType: "arraybuffer",
                 onload: function (r) {
-                    resolve(r);
+                    resolve(r.response);
                 },
                 onerror: function (error) {
-                    resolve({ "loaded": 0 })
+                    resolve({ "byteLength": 0 })
+                },
+                ontimeout: function (out) {
+                    log("速度太慢了")
+                    resolve({ "byteLength": 0 })
                 }
             });
         });
     }
 
-    //生成随机数
-    function randomIntFromInterval(min, max) { // min and max included
-        return Math.floor(Math.random() * (max - min + 1) + min)
-    }
-
-    //创建整个界面
-    async function go(SearchSource) {
-        // log_machine(`正在搜索${testSearchSource[2].name}`)
-        log_machine(`正在搜索${SearchSource.name}`)
-        let playList = await search(SearchSource.searchUrl, videoName)
-        log_machine(`正在播放${playList[0].name}:${playList[0].url}`)
-        createPlayer(playList[0].url)
-        createVideoSelector(playList)
-        await createSourceListFirst(videoName)
-    }
-
-
-    //测试代码
-    // testSpeed(arr)
-    // downloadM3u8("https://pps.sd-play.com/20220705/iS7EWI78/index.m3u8")
-    // let div = document.createElement("div");
-    async function main() {
-        appendStyle(css) //添加css
-        let rapidPlay = htmlToElement(playButton)
-        rapidPlay.onclick = async () => {
-            for (let item of testSearchSource) {
-                let playList = await search(item.searchUrl, videoName)
-                if (playList != 0) {
-                    go(item)
-                    return
-                }
-            }
-            window.alert("没找到此资源，可能是因为豆瓣标题里夹杂了别的文字，可以选中部分文字后再次点击播放");
-        }
-        rapidPlay.onmouseover = () => {
-            getVideoName()
-        }
-        if (device == "pc") {
-            document.querySelector("h1").appendChild(rapidPlay)
-        } else {
-            document.querySelector(".sub-original-title").appendChild(rapidPlay)
-        }
+    GM_addStyle(
+        `button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+   background-color:#f9f9f9;
+}
+button:hover {
+  background-color:#f2f1f2;
+}
+  button:active{
+  border-color: #2f2f2f;
+  }`
+    );
 
 
-    }
+    GM_addStyle(
+        `.TalionNav{
+	z-index:10;
+}
+.speed-slow{
+	color:#c62828;
+}
+.speed-fast{
+	color:#4aa150;
+}
 
-    //将源根据速度进行排序
-    async function sortSource() {
-        log_machine("进入排序...")
-        let sortedSource = []
-        let videoName = getVideoName()
-        for (let item of testSearchSource) {
-            log_machine(`正在搜索${item.name}`)
-            let playList = await search(item.searchUrl, videoName)
-            if (playList == 0) continue;
-            log_machine(`测速中...正在下载${item.name}`)
-            let tsList = await downloadM3u8(playList[0].url)
-            let speed = 0
-            if (tsList.length == 0) {
-                log_machine(`没有找到下载链接，请检查`)
-            } else {
-                speed = await testSpeed(tsList)
-            }
-
-            log_machine(`速度为${speed}`)
-            sortedSource.push({ ...item, "speed": speed })
-        }
-        sortedSource.sort((a, b) => {
-            return b.speed - a.speed;//从大到小排序
-        })
-        log_machine("排序完成...")
-        for (let item of sortedSource) {
-            log_machine(`${item.name}speed:${item.speed}`)
-        }
-        return sortedSource
-    }
+.source-selector{
+	margin:0.5em;
+}
+.series-selector{
+	margin:0.5em;
+}
 
 
+.liu-playContainer{
+	width:100%;
+	height:100%;
+	background-color:#121212;
+	position:fixed;
+	top:0;
+	z-index:11;
+}
 
+.liu-closePlayer{
+	float:right;
+	margin-inline:10px;
+	color:white;
+}
 
-    main()
+.video-selector{
+	display:flex;
+	flex-wrap:wrap;
+	margin-top:1rem;
+}
 
+.liu-selector:hover{
+	color:#aed0ee;
+	background-color:none;
+}
 
-})()
+.liu-selector{
+	color:black;
+	cursor:pointer;
+	padding:3px;
+	margin:5px;
+	border-radius:2px;
+}
+
+.liu-rapidPlay{
+	color: #007722;
+}
+
+.liu-light{
+	background-color:#7bed9f;
+}
+.liu-btn {
+	width: 6.5em;
+	height: 2em;
+	margin: 0.5em;
+	background: #41ac52;
+	color: white;
+	border: none;
+	border-radius: 0.625em;
+	font-size: 20px;
+	font-weight: bold;
+	cursor: pointer;
+	position: relative;
+	z-index: 1;
+	overflow: hidden;
+}
+
+.liu-btn:hover {
+	color: #41ac52;
+}
+
+.liu-btn:after {
+	content: '';
+	background: white;
+	position: absolute;
+	z-index: -1;
+	left: -20%;
+	right: -20%;
+	top: 0;
+	bottom: 0;
+	transform: skewX(-45deg) scale(0, 1);
+	transition: all 0.5s;
+}
+
+.liu-btn:hover:after {
+	transform: skewX(-45deg) scale(1, 1);
+	-webkit-transition: all 0.5s;
+	transition: all 0.5s;
+}
+xy-button{
+	margin:0em 1em 0em 0em;
+	height:1.5em;
+	cursor:pointer;
+}
+.playSpace{
+	display: grid;
+	height:500px;
+	grid-template-rows: 1fr;
+	grid-template-columns: 70% 30%;
+	grid-row-gap:0px;
+	grid-column-gap:0px;
+}
+.series-select-space::-webkit-scrollbar {display:none}
+.series-select-space{
+	height:500px;
+}
+.artplayer-app{
+	height:500px;
+}
+@media screen and (max-width: 1025px) {
+	.playSpace{
+		display: grid;
+		height:700px;
+		grid-template-rows: 1fr 1fr;
+		grid-template-columns:1fr;
+		grid-row-gap:0px;
+		grid-column-gap:0px;
+	}
+	.series-select-space{
+		height:200px;
+	}
+	.artplayer-app{
+		height:400px;
+	}
+}`
+    );
+    new PlayBtn();
+    addScript();
+})();
